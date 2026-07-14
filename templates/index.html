@@ -111,117 +111,149 @@
 </footer>
 
 <script>
+console.log("[libromormon] script tag parsed, readyState=", document.readyState);
+
 function boot() {
-const API = "";
-const $ = id => document.getElementById(id);
-const toast = msg => {
-  const t = $("status");
-  if (t) { t.textContent = msg; setTimeout(() => { t.textContent = ""; }, 3000); }
-};
+  console.log("[libromormon] boot() running, URL=", location.href);
+  const API = "";
+  const $ = id => document.getElementById(id);
+  const toast = msg => {
+    const t = $("status");
+    if (t) { t.textContent = msg; setTimeout(() => { t.textContent = ""; }, 3000); }
+  };
 
-let books = [];
-
-// Carga los libros en el selector
-async function loadBooks() {
-  try {
-    const r = await fetch(API + "/api/books");
-    const j = await r.json();
-    books = j.libros || [];
-    $("libro").innerHTML = `<option value="">— cualquiera —</option>` +
-      books.map(b => `<option value="${b.slug}">${b.nombre} (${b.capitulos} cap.)</option>`).join("");
-  } catch (e) {
-    console.error(e);
-    toast("Error cargando libros");
+  // Diagnóstico: ¿qué elementos hay en el DOM?
+  const wanted = ["q", "btn-search", "btn-one", "mode", "limit", "libro",
+                  "results", "opb-title", "opb", "status"];
+  const found = Object.fromEntries(wanted.map(id => [id, !!document.getElementById(id)]));
+  console.log("[libromormon] DOM check:", found);
+  const missing = wanted.filter(id => !found[id]);
+  if (missing.length) {
+    console.error("[libromormon] MISSING IDs in DOM:", missing);
+    document.body.insertAdjacentHTML("afterbegin",
+      `<div style="background:#ff6b6b;color:#fff;padding:12px;font-family:monospace">
+       ⚠ libromormon UI bug: faltan IDs en el DOM: ${missing.join(", ")}.
+       Probable caché vieja. Hard refresh: Ctrl+Shift+R (Linux/Win) o Cmd+Shift+R (Mac).
+       </div>`);
   }
-}
 
-function highlight(text, words) {
-  if (!words || !words.length) return text;
-  const re = new RegExp("(" + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "gi");
-  return text.replace(re, "<mark>$1</mark>");
-}
+  let books = [];
 
-async function doSearch() {
-  const q = $("q").value.trim();
-  if (!q) { toast("Escribe al menos una palabra"); return; }
-  const mode = $("mode").value;
-  const limit = $("limit").value || 20;
-  const libro = $("libro").value;
-  const url = mode === "search"
-      ? `${API}/api/search?q=${encodeURIComponent(q)}&limit=${limit}&libro=${encodeURIComponent(libro)}`
-      : `${API}/api/related?words=${encodeURIComponent(q)}&limit=${limit}&libro=${encodeURIComponent(libro)}`;
-  const res = $("#results");
-  res.innerHTML = `<div class="empty">Buscando…</div>`;
-  try {
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) { res.innerHTML = `<div class="empty" style="color:var(--bad)">${j.error}</div>`; return; }
-    renderResults(j, q, mode);
-  } catch (e) {
-    res.innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  async function loadBooks() {
+    try {
+      const r = await fetch(API + "/api/books");
+      const j = await r.json();
+      books = j.libros || [];
+      const sel = $("libro");
+      if (sel) {
+        sel.innerHTML = `<option value="">— cualquiera —</option>` +
+          books.map(b => `<option value="${b.slug}">${b.nombre} (${b.capitulos} cap.)</option>`).join("");
+      }
+    } catch (e) {
+      console.error("[libromormon] loadBooks:", e);
+      toast("Error cargando libros");
+    }
   }
-}
 
-function renderResults(j, q, mode) {
-  const res = $("#results");
-  const items = mode === "search" ? j : j;
-  const arr = Array.isArray(items) ? items : (items.items || []);
-  if (!arr.length) {
-    res.innerHTML = `<div class="empty">Sin resultados para «${escapeHtml(q)}»</div>`;
-    return;
+  function highlight(text, words) {
+    if (!words || !words.length) return text;
+    const re = new RegExp("(" + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "gi");
+    return text.replace(re, "<mark>$1</mark>");
   }
-  const words = q.split(/[,\s]+/).map(s=>s.trim()).filter(s=>s.length>=3);
-  res.innerHTML = `
-    <div class="section-title">${mode === "search" ? "Coincidencias" : "Relacionadas"} ·
-      <span class="count">${arr.length}</span> de "${escapeHtml(q)}"</div>` +
-    arr.map(it => {
-      const text = highlight(escapeHtml(it.texto), words);
-      const sumario = it.sumario ? `<div class="sumario">📖 ${escapeHtml(it.sumario)}</div>` : "";
-      const score = it.score !== undefined ? `<span class="score">score ${it.score.toFixed(2)}</span>` : "";
-      return `<div class="result">
-        <div class="head"><div class="ref">
-          <a href="${it.url}" target="_blank" rel="noopener">${escapeHtml(it.referencia)}</a>
-        </div>${score}</div>
-        <div class="text">${text}</div>
-        ${sumario}
-      </div>`;
-    }).join("");
-}
 
-async function loadOnePerBook() {
-  const seed = Math.floor(Math.random() * 1e6);
-  const url = `${API}/api/one_per_book?seed=${seed}`;
-  const wrap = $("#opb");
-  $("#opb-title").style.display = "block";
-  wrap.innerHTML = `<div class="empty">…</div>`;
-  try {
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) { wrap.innerHTML = ""; toast(j.error); return; }
-    wrap.innerHTML = j.map(it => `
-      <div class="opb" onclick="window.open('${it.url}','_blank')">
-        <div class="libro">${escapeHtml(it.libro)}</div>
-        <div class="ref">${escapeHtml(it.referencia)}</div>
-        <div class="text">${escapeHtml(it.texto)}</div>
-      </div>`).join("");
-  } catch (e) {
-    wrap.innerHTML = "";
-    toast("Error: " + e.message);
+  async function doSearch() {
+    console.log("[libromormon] doSearch() called");
+    const qEl = $("q"); if (!qEl) { console.error("no #q"); return; }
+    const q = qEl.value.trim();
+    if (!q) { toast("Escribe al menos una palabra"); return; }
+    const mode = ($("mode")||{}).value || "related";
+    const limit = ($("limit")||{}).value || 20;
+    const libro = ($("libro")||{}).value || "";
+    const url = mode === "search"
+        ? `${API}/api/search?q=${encodeURIComponent(q)}&limit=${limit}&libro=${encodeURIComponent(libro)}`
+        : `${API}/api/related?words=${encodeURIComponent(q)}&limit=${limit}&libro=${encodeURIComponent(libro)}`;
+    console.log("[libromormon] fetch:", url);
+    const res = $("#results");
+    if (!res) { console.error("no #results div in DOM"); return; }
+    res.innerHTML = `<div class="empty">Buscando…</div>`;
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+      if (j.error) { res.innerHTML = `<div class="empty" style="color:var(--bad)">${j.error}</div>`; return; }
+      renderResults(j, q, mode);
+    } catch (e) {
+      console.error("[libromormon] fetch error:", e);
+      res.innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+    }
   }
-}
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
+  function renderResults(j, q, mode) {
+    const res = $("#results");
+    if (!res) { console.error("no #results for render"); return; }
+    const arr = Array.isArray(j) ? j : (j.items || []);
+    if (!arr.length) {
+      res.innerHTML = `<div class="empty">Sin resultados para «${escapeHtml(q)}»</div>`;
+      return;
+    }
+    const words = q.split(/[,\s]+/).map(s=>s.trim()).filter(s=>s.length>=3);
+    res.innerHTML = `
+      <div class="section-title">${mode === "search" ? "Coincidencias" : "Relacionadas"} ·
+        <span class="count">${arr.length}</span> de "${escapeHtml(q)}"</div>` +
+      arr.map(it => {
+        const text = highlight(escapeHtml(it.texto), words);
+        const sumario = it.sumario ? `<div class="sumario">📖 ${escapeHtml(it.sumario)}</div>` : "";
+        const score = it.score !== undefined ? `<span class="score">score ${it.score.toFixed(2)}</span>` : "";
+        return `<div class="result">
+          <div class="head"><div class="ref">
+            <a href="${it.url}" target="_blank" rel="noopener">${escapeHtml(it.referencia)}</a>
+          </div>${score}</div>
+          <div class="text">${text}</div>
+          ${sumario}
+        </div>`;
+      }).join("");
+  }
 
-// Eventos
-$("btn-search").addEventListener("click", doSearch);
-$("q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
-$("btn-one").addEventListener("click", loadOnePerBook);
+  async function loadOnePerBook() {
+    const seed = Math.floor(Math.random() * 1e6);
+    const url = `${API}/api/one_per_book?seed=${seed}`;
+    const wrap = $("#opb");
+    const titleEl = $("#opb-title");
+    if (titleEl && titleEl.style) titleEl.style.display = "block";
+    if (!wrap) { console.error("no #opb div"); return; }
+    wrap.innerHTML = `<div class="empty">…</div>`;
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+      if (j.error) { wrap.innerHTML = ""; toast(j.error); return; }
+      wrap.innerHTML = j.map(it => `
+        <div class="opb" onclick="window.open('${it.url}','_blank')">
+          <div class="libro">${escapeHtml(it.libro)}</div>
+          <div class="ref">${escapeHtml(it.referencia)}</div>
+          <div class="text">${escapeHtml(it.texto)}</div>
+        </div>`).join("");
+    } catch (e) {
+      console.error("[libromormon] loadOnePerBook:", e);
+      wrap.innerHTML = "";
+      toast("Error: " + e.message);
+    }
+  }
 
-// Init
-loadBooks();
-loadOnePerBook();
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // Eventos
+  const btnSearch = $("btn-search");
+  const qInput = $("q");
+  const btnOne = $("btn-one");
+  if (btnSearch) btnSearch.addEventListener("click", doSearch);
+  if (qInput) qInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+  if (btnOne) btnOne.addEventListener("click", loadOnePerBook);
+
+  // Init
+  loadBooks();
+  loadOnePerBook();
+  console.log("[libromormon] boot() finished, init kicked off");
 }
 
 if (document.readyState === "loading") {
