@@ -111,9 +111,13 @@
 </footer>
 
 <script>
+function boot() {
 const API = "";
 const $ = id => document.getElementById(id);
-const toast = msg => { const t=$("status"); t.textContent=msg; setTimeout(()=>t.textContent="",3000); };
+const toast = msg => {
+  const t = $("status");
+  if (t) { t.textContent = msg; setTimeout(() => { t.textContent = ""; }, 3000); }
+};
 
 let books = [];
 
@@ -218,6 +222,13 @@ $("btn-one").addEventListener("click", loadOnePerBook);
 // Init
 loadBooks();
 loadOnePerBook();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", boot);
+} else {
+  boot();
+}
 </script>
 </body>
 </html>

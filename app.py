@@ -80,7 +80,11 @@ def _api(fn, *args, **kwargs):
 # ---------- UI ----------
 @app.route("/")
 def index():
-    return render_template("index.html", dataset=sources.info())
+    resp = app.make_response(render_template("index.html", dataset=sources.info()))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 # ---------- API ----------
