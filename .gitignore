@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# editores
+.vscode/
+.idea/
+.DS_Store
+
+# entorno virtual local
+.venv/
+venv/
+
+# logs
+*.log

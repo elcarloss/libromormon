@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Libro de Mormón — Búsqueda contextual</title>
+<style>
+  :root {
+    --bg:#0f1419; --panel:#1a2028; --panel2:#232b35; --border:#2d3743;
+    --text:#e1e7ef; --muted:#8b97a8; --accent:#4fb3ff; --accent2:#ff8b3d;
+    --good:#6dd47e; --bad:#ff6b6b; --gold:#ffd84d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  body { display:flex; flex-direction:column; min-height:100vh; }
+
+  header { background:var(--panel2); border-bottom:1px solid var(--border); padding:18px 24px; }
+  header h1 { margin:0; font-size:18px; font-weight:600; }
+  header .sub { color:var(--muted); font-size:12px; margin-top:2px; }
+
+  main { max-width:1100px; width:100%; margin:0 auto; padding:18px 24px; flex:1; }
+
+  .search-bar { display:flex; gap:8px; margin-bottom:14px; }
+  .search-bar input { flex:1; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:15px; font-family:inherit; }
+  .search-bar input:focus { outline:1px solid var(--accent); border-color:var(--accent); }
+  .search-bar button { padding:10px 16px; background:var(--accent); color:#001018; border:none; border-radius:6px; font-weight:600; cursor:pointer; }
+  .search-bar button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); font-weight:500; }
+  .search-bar button:hover { filter:brightness(1.08); }
+
+  .filters { display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
+  .filters select { padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:inherit; }
+
+  .section-title { font-size:13px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:24px 0 10px 0; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .section-title .count { color:var(--accent); font-weight:600; }
+
+  /* Resultados */
+  .result { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:14px 16px; margin-bottom:10px; }
+  .result .head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:6px; }
+  .result .ref { font-weight:600; color:var(--accent); font-size:14px; }
+  .result .ref a { color:inherit; text-decoration:none; }
+  .result .ref a:hover { text-decoration:underline; }
+  .result .score { font-size:11px; color:var(--muted); background:var(--bg); padding:2px 8px; border-radius:10px; }
+  .result .text { font-size:14px; line-height:1.55; }
+  .result .text mark { background:rgba(79,179,255,0.18); color:var(--accent); padding:1px 2px; border-radius:2px; }
+  .result .sumario { font-size:11px; color:var(--muted); margin-top:8px; font-style:italic; }
+
+  /* Tarjeta de "uno por libro" */
+  .grid-3 { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
+  .opb { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; cursor:pointer; transition:transform 0.1s, border-color 0.1s; }
+  .opb:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .opb .libro { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+  .opb .ref { font-weight:600; color:var(--accent); font-size:13px; margin:2px 0 6px 0; }
+  .opb .text { font-size:13px; line-height:1.5; color:var(--text); }
+
+  .empty { padding:30px; text-align:center; color:var(--muted); }
+
+  footer { background:var(--panel2); border-top:1px solid var(--border); padding:10px 24px; font-size:11px; color:var(--muted); text-align:center; }
+  footer a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📖 Libro de Mormón — búsqueda contextual</h1>
+  <div class="sub">
+    Datos: <a href="{{ dataset.github_owner }}/{{ dataset.github_repo }}"
+              target="_blank"
+              style="color:var(--accent);text-decoration:none">{{ dataset.github_owner }}/{{ dataset.github_repo }}</a>
+    · texto original: <a href="https://www.churchofjesuschrist.org/study/scriptures/bofm?lang=spa"
+              target="_blank"
+              style="color:var(--accent);text-decoration:none">churchofjesuschrist.org</a>
+    · 15 libros · caché local de 30 días
+  </div>
+</header>
+
+<main>
+  <div class="search-bar">
+    <input id="q" type="text" autocomplete="off"
+           placeholder="fe, esperanza, caridad  (separadas por coma o espacio)">
+    <button id="btn-search">Buscar contexto</button>
+    <button id="btn-one" class="secondary">Una por libro</button>
+  </div>
+
+  <div class="filters">
+    <label>Método:
+      <select id="mode">
+        <option value="related" selected>relacionadas (ranking)</option>
+        <option value="search">todas las palabras (AND)</option>
+      </select>
+    </label>
+    <label>Límite:
+      <input id="limit" type="number" value="20" min="5" max="100" step="5" style="width:80px">
+    </label>
+    <label>Libro (opcional):
+      <select id="libro"><option value="">— cualquiera —</option></select>
+    </label>
+    <span id="status" style="margin-left:auto"></span>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="section-title" id="opb-title" style="display:none">Una escritura por cada libro</div>
+  <div id="opb" class="grid-3"></div>
+</main>
+
+<footer>
+  Datos estables desde GitHub · <a href="/api/health" target="_blank">/api/health</a> ·
+  <a href="/api/books" target="_blank">/api/books</a> ·
+  <a href="https://github.com/{{ dataset.github_owner }}/{{ dataset.github_repo }}"
+     target="_blank">fuente de datos</a>
+</footer>
+
+<script>
+const API = "";
+const $ = id => document.getElementById(id);
+const toast = msg => { const t=$("status"); t.textContent=msg; setTimeout(()=>t.textContent="",3000); };
+
+let books = [];
+
+// Carga los libros en el selector
+async function loadBooks() {
+  try {
+    const r = await fetch(API + "/api/books");
+    const j = await r.json();
+    books = j.libros || [];
+    $("libro").innerHTML = `<option value="">— cualquiera —</option>` +
+      books.map(b => `<option value="${b.slug}">${b.nombre} (${b.capitulos} cap.)</option>`).join("");
+  } catch (e) {
+    console.error(e);
+    toast("Error cargando libros");
+  }
+}
+
+function highlight(text, words) {
+  if (!words || !words.length) return text;
+  const re = new RegExp("(" + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")", "gi");
+  return text.replace(re, "<mark>$1</mark>");
+}
+
+async function doSearch() {
+  const q = $("q").value.trim();
+  if (!q) { toast("Escribe al menos una palabra"); return; }
+  const mode = $("mode").value;
+  const limit = $("limit").value || 20;
+  const libro = $("libro").value;
+  const url = mode === "search"
+      ? `${API}/api/search?q=${encodeURIComponent(q)}&limit=${limit}&libro=${encodeURIComponent(libro)}`
+      : `${API}/api/related?words=${encodeURIComponent(q)}&limit=${limit}&libro=${encodeURIComponent(libro)}`;
+  const res = $("#results");
+  res.innerHTML = `<div class="empty">Buscando…</div>`;
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { res.innerHTML = `<div class="empty" style="color:var(--bad)">${j.error}</div>`; return; }
+    renderResults(j, q, mode);
+  } catch (e) {
+    res.innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderResults(j, q, mode) {
+  const res = $("#results");
+  const items = mode === "search" ? j : j;
+  const arr = Array.isArray(items) ? items : (items.items || []);
+  if (!arr.length) {
+    res.innerHTML = `<div class="empty">Sin resultados para «${escapeHtml(q)}»</div>`;
+    return;
+  }
+  const words = q.split(/[,\s]+/).map(s=>s.trim()).filter(s=>s.length>=3);
+  res.innerHTML = `
+    <div class="section-title">${mode === "search" ? "Coincidencias" : "Relacionadas"} ·
+      <span class="count">${arr.length}</span> de "${escapeHtml(q)}"</div>` +
+    arr.map(it => {
+      const text = highlight(escapeHtml(it.texto), words);
+      const sumario = it.sumario ? `<div class="sumario">📖 ${escapeHtml(it.sumario)}</div>` : "";
+      const score = it.score !== undefined ? `<span class="score">score ${it.score.toFixed(2)}</span>` : "";
+      return `<div class="result">
+        <div class="head"><div class="ref">
+          <a href="${it.url}" target="_blank" rel="noopener">${escapeHtml(it.referencia)}</a>
+        </div>${score}</div>
+        <div class="text">${text}</div>
+        ${sumario}
+      </div>`;
+    }).join("");
+}
+
+async function loadOnePerBook() {
+  const seed = Math.floor(Math.random() * 1e6);
+  const url = `${API}/api/one_per_book?seed=${seed}`;
+  const wrap = $("#opb");
+  $("#opb-title").style.display = "block";
+  wrap.innerHTML = `<div class="empty">…</div>`;
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { wrap.innerHTML = ""; toast(j.error); return; }
+    wrap.innerHTML = j.map(it => `
+      <div class="opb" onclick="window.open('${it.url}','_blank')">
+        <div class="libro">${escapeHtml(it.libro)}</div>
+        <div class="ref">${escapeHtml(it.referencia)}</div>
+        <div class="text">${escapeHtml(it.texto)}</div>
+      </div>`).join("");
+  } catch (e) {
+    wrap.innerHTML = "";
+    toast("Error: " + e.message);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// Eventos
+$("btn-search").addEventListener("click", doSearch);
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+$("btn-one").addEventListener("click", loadOnePerBook);
+
+// Init
+loadBooks();
+loadOnePerBook();
+</script>
+</body>
+</html>
