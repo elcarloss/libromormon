@@ -23,8 +23,9 @@ Endpoints REST:
   GET  /api/chapter/<slug>/<chap>
   GET  /api/verse/<slug>/<chap>/<vs>
   GET  /api/one_per_book[?seed=N]
-  GET  /api/search?q=…
-  GET  /api/related?words=…
+  GET  /api/search?q=…[&limit=&libro=]
+  GET  /api/related?words=…[&limit=&libro=]
+  GET  /api/verses_about?topic=<texto>[&limit=N][&libro=]
   POST /api/reload
 """
 import argparse
@@ -143,6 +144,22 @@ def api_related():
     limit = _qi("limit", 20)
     libro = _q("libro")
     return _api(BoMAPI.related, words, limit=limit, libro=libro)
+
+
+@app.route("/api/verses_about")
+def api_verses_about():
+    """Devuelve los N versículos más relevantes sobre un tema/palabra.
+
+    Acepta ``topic`` (o ``palabra`` o ``words``, indistintamente).
+    ``limit`` por defecto 10; máximo recomendado 100.
+    Filtro opcional ``libro`` por slug canónico (p. ej. ``alma``).
+    """
+    topic = _q("topic") or _q("palabra") or _q("words", "")
+    limit = _qi("limit", 10)
+    if limit and limit > 100:
+        limit = 100
+    libro = _q("libro")
+    return _api(BoMAPI.related, topic, limit=limit, libro=libro)
 
 
 @app.route("/api/reload", methods=["POST"])

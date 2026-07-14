@@ -94,7 +94,8 @@ BOM_GITHUB_OWNER=mi-org BOM_GITHUB_REPO=bom-fork python3 app.py
 | GET    | `/api/verse/<slug>/<n>/<v>`    | versículo individual                            |
 | GET    | `/api/one_per_book[?seed=N]`   | 15 versículos aleatorios, uno por libro         |
 | GET    | `/api/search?q=…[&limit=&libro=]`   | AND estricto (todas las palabras)         |
-| GET    | `/api/related?words=…[&limit=&libro=]`| ranking TF-IDF + bonus capítulo           |
+| GET    | `/api/related?words=…[&limit=&libro=]`| ranking TF-IDF + bonus capítulo (alias)    |
+| GET    | `/api/verses_about?topic=…[&limit=N][&libro=]`| top-N versículos sobre un tema (TF-IDF) |
 | POST   | `/api/reload`                  | fuerza recarga de la caché                      |
 
 Ejemplos:
@@ -104,6 +105,8 @@ curl -s 'http://localhost:5060/api/health' | jq
 curl -s 'http://localhost:5060/api/book/alma' | jq '.capitulos, .lista | length'
 curl -s 'http://localhost:5060/api/verse/alma/32/21' | jq
 curl -s 'http://localhost:5060/api/search?q=fe%20esperanza&limit=5' | jq
+curl -s 'http://localhost:5060/api/verses_about?topic=cristo&limit=10' | jq
+curl -s 'http://localhost:5060/api/verses_about?palabra=caridad&limit=5' | jq
 curl -s 'http://localhost:5060/api/related?words=caridad%20fe%20esperanza&limit=5' | jq
 ```
 
@@ -111,9 +114,23 @@ curl -s 'http://localhost:5060/api/related?words=caridad%20fe%20esperanza&limit=
 
 - **AND** (`/api/search`): cada versículo contiene TODAS las palabras
   (tras quitar stopwords en español).
-- **Ranking** (`/api/related`): TF-IDF + bonus pequeño si la(s) palabra(s)
-  aparecen en versículos vecinos del mismo capítulo. Mejor para consultas
-  de una o dos palabras.
+- **Ranking por tema** (`/api/verses_about`): los **N** versículos más
+  relevantes para una palabra o tema. Acepta `topic`, `palabra` o `words`.
+  Ranking TF-IDF + bonus pequeño si las palabras aparecen en versículos
+  vecinos del mismo capítulo. Por defecto `limit=10`, máximo 100.
+- **Alias legacy** (`/api/related`): mismo motor, distinto nombre. Se mantiene
+  por compatibilidad.
+
+```bash
+# 10 versículos sobre Cristo
+curl 'http://localhost:5060/api/verses_about?topic=cristo&limit=10'
+
+# 5 versículos sobre fe, sólo del libro de Alma
+curl 'http://localhost:5060/api/verses_about?palabra=fe&limit=5&libro=alma'
+
+# usando el alias en inglés
+curl 'http://localhost:5060/api/related?words=caridad&limit=20'
+```
 
 ## Scripts utilitarios
 
